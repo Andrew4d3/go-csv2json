@@ -46,6 +46,22 @@ func getFileData() (*inputFile, error) {
 	return &inputFile{fileLocation, *separator, *pretty}, nil
 }
 
+func processLine(headers []string, rawLine string, separator string) (map[string]string, error) {
+	dataList := strings.Split(rawLine, separator)
+
+	if len(dataList) != len(headers) {
+		return nil, errors.New("Line doesn't match headers format. Skipping.")
+	}
+
+	recordMap := make(map[string]string)
+
+	for i, name := range headers {
+		recordMap[name] = dataList[i]
+	}
+
+	return recordMap, nil
+}
+
 func processFile(fileData *inputFile, writerChannel <-chan map[string]string) {
 	file, err := os.Open(fileData.filepath)
 
@@ -71,6 +87,23 @@ func processFile(fileData *inputFile, writerChannel <-chan map[string]string) {
 
 	headers := strings.Split(line, separator)
 	fmt.Println(headers)
+
+	for {
+		line, err = reader.ReadString('\n')
+
+		if err != nil {
+			break
+		}
+
+		record, err := processLine(headers, line, separator)
+
+		if err != nil {
+			fmt.Printf("Line: %sError: %s\n", line, err)
+			continue
+		}
+		// Process the line here.
+		fmt.Println(record)
+	}
 }
 
 func main() {
