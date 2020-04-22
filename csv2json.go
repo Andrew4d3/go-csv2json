@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,6 +15,12 @@ type inputFile struct {
 	filepath  string
 	separator string
 	pretty    bool
+}
+
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
 }
 
 func getFileData() (*inputFile, error) {
@@ -62,7 +69,7 @@ func processLine(headers []string, rawLine string, separator string) (map[string
 	return recordMap, nil
 }
 
-func processFile(fileData *inputFile, writerChannel <-chan map[string]string) {
+func processCsvFile(fileData *inputFile, writerChannel chan<- map[string]string) {
 	file, err := os.Open(fileData.filepath)
 
 	if err != nil {
@@ -86,12 +93,12 @@ func processFile(fileData *inputFile, writerChannel <-chan map[string]string) {
 	}
 
 	headers := strings.Split(line, separator)
-	fmt.Println(headers)
 
 	for {
 		line, err = reader.ReadString('\n')
 
 		if err != nil {
+			close(writerChannel)
 			break
 		}
 
@@ -101,8 +108,51 @@ func processFile(fileData *inputFile, writerChannel <-chan map[string]string) {
 			fmt.Printf("Line: %sError: %s\n", line, err)
 			continue
 		}
-		// Process the line here.
-		fmt.Println(record)
+
+		writerChannel <- record
+	}
+}
+
+func createStringWriter(csvPath string) func(string, bool) {
+	jsonDir := filepath.Dir(csvPath)
+	jsonName := fmt.Sprintf("%s.json", strings.TrimSuffix(filepath.Base(csvPath), ".csv"))
+	finalLocation := fmt.Sprintf("%s/%s", jsonDir, jsonName)
+
+	f, err := os.Create(finalLocation)
+	check(err)
+
+	return func(data string, close bool) {
+		_, err := f.WriteString(data)
+		check(err)
+
+		if close {
+			f.Close()
+		}
+	}
+}
+
+func writeJsonFile(csvPath string, writerChannel <-chan map[string]string, done chan<- bool) {
+	writeString := createStringWriter(csvPath)
+	fmt.Println("Writing JSON file...")
+	writeString("[", false)
+	first := true
+	for {
+		record, more := <-writerChannel
+		if more {
+			if !first {
+				writeString(",", false)
+			} else {
+				first = false
+			}
+
+			jsonData, _ := json.Marshal(record)
+			writeString(string(jsonData), false)
+		} else {
+			writeString("]", true)
+			fmt.Println("Completed!")
+			done <- true
+			break
+		}
 	}
 }
 
@@ -114,6 +164,10 @@ func main() {
 	}
 
 	writerChannel := make(chan map[string]string)
+	done := make(chan bool)
 
-	processFile(fileData, writerChannel)
+	go processCsvFile(fileData, writerChannel)
+	go writeJsonFile(fileData.filepath, writerChannel, done)
+
+	<-done
 }
