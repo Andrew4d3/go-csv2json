@@ -38,26 +38,31 @@ func getFileData() (*inputFile, error) {
 
 	// Check if file does not exist
 	if _, err := os.Stat(fileLocation); err != nil && os.IsNotExist(err) {
-		return nil, errors.New(fmt.Sprintf("File %s does not exist", fileLocation))
-	}
-
-	// Check if file is CSV
-	if fileExtension := filepath.Ext(fileLocation); fileExtension != ".csv" {
-		return nil, errors.New(fmt.Sprintf("File %s is not CSV", fileLocation))
-	}
-
-	if !(*separator == "comma" || *separator == "semicolon") {
-		return nil, errors.New("Only comma or semicolon separators are allowed")
+		return nil, fmt.Errorf("File %s does not exist", fileLocation)
 	}
 
 	return &inputFile{fileLocation, *separator, *pretty}, nil
+}
+
+func checkIfValidFile(filename string) (bool, error) {
+	// Check if file does exist
+	if _, err := os.Stat(filename); err != nil && os.IsNotExist(err) {
+		return false, fmt.Errorf("File %s does not exist", filename)
+	}
+
+	// Check if file is CSV
+	if fileExtension := filepath.Ext(filename); fileExtension != ".csv" {
+		return false, fmt.Errorf("File %s is not CSV", filename)
+	}
+
+	return true, nil
 }
 
 func processLine(headers []string, rawLine string, separator string) (map[string]string, error) {
 	dataList := strings.Split(rawLine, separator)
 
 	if len(dataList) != len(headers) {
-		return nil, errors.New("Line doesn't match headers format. Skipping.")
+		return nil, errors.New("Line doesn't match headers format. Skipping")
 	}
 
 	recordMap := make(map[string]string)
@@ -131,24 +136,42 @@ func createStringWriter(csvPath string) func(string, bool) {
 	}
 }
 
-func writeJsonFile(csvPath string, writerChannel <-chan map[string]string, done chan<- bool) {
+func writeJSONFile(csvPath string, writerChannel <-chan map[string]string, done chan<- bool, pretty bool) {
 	writeString := createStringWriter(csvPath)
+
+	var jsonFunc func(map[string]string) string
+	var breakLine string
+	if pretty {
+		breakLine = "\n"
+		jsonFunc = func(record map[string]string) string {
+			jsonData, _ := json.MarshalIndent(record, "   ", "   ")
+			return "   " + string(jsonData)
+		}
+	} else {
+		breakLine = ""
+		jsonFunc = func(record map[string]string) string {
+			jsonData, _ := json.Marshal(record)
+			return string(jsonData)
+		}
+	}
+
 	fmt.Println("Writing JSON file...")
-	writeString("[", false)
+
+	writeString("["+breakLine, false)
 	first := true
 	for {
 		record, more := <-writerChannel
 		if more {
 			if !first {
-				writeString(",", false)
+				writeString(","+breakLine, false)
 			} else {
 				first = false
 			}
 
-			jsonData, _ := json.Marshal(record)
-			writeString(string(jsonData), false)
+			jsonData := jsonFunc(record)
+			writeString(jsonData, false)
 		} else {
-			writeString("]", true)
+			writeString(breakLine+"]", true)
 			fmt.Println("Completed!")
 			done <- true
 			break
@@ -163,11 +186,15 @@ func main() {
 		panic(err)
 	}
 
+	if _, err := checkIfValidFile(fileData.filepath); err != nil {
+		panic(err)
+	}
+
 	writerChannel := make(chan map[string]string)
 	done := make(chan bool)
 
 	go processCsvFile(fileData, writerChannel)
-	go writeJsonFile(fileData.filepath, writerChannel, done)
+	go writeJSONFile(fileData.filepath, writerChannel, done, fileData.pretty)
 
 	<-done
 }
