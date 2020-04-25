@@ -36,9 +36,8 @@ func getFileData() (*inputFile, error) {
 
 	fileLocation := flag.Arg(0)
 
-	// Check if file does not exist
-	if _, err := os.Stat(fileLocation); err != nil && os.IsNotExist(err) {
-		return nil, fmt.Errorf("File %s does not exist", fileLocation)
+	if !(*separator == "comma" || *separator == "semicolon") {
+		return nil, errors.New("Only comma or semicolon separators are allowed")
 	}
 
 	return &inputFile{fileLocation, *separator, *pretty}, nil
