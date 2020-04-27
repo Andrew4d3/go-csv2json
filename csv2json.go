@@ -29,8 +29,8 @@ func getFileData() (*inputFile, error) {
 		return nil, errors.New("A filepath argument is required")
 	}
 
-	separator := flag.String("separator", "comma", "Column separator (Default is comma)")
-	pretty := flag.Bool("pretty", false, "Generate pretty JSON (Default is false)")
+	separator := flag.String("separator", "comma", "Column separator")
+	pretty := flag.Bool("pretty", false, "Generate pretty JSON")
 
 	flag.Parse()
 
@@ -44,14 +44,14 @@ func getFileData() (*inputFile, error) {
 }
 
 func checkIfValidFile(filename string) (bool, error) {
-	// Check if file does exist
-	if _, err := os.Stat(filename); err != nil && os.IsNotExist(err) {
-		return false, fmt.Errorf("File %s does not exist", filename)
-	}
-
 	// Check if file is CSV
 	if fileExtension := filepath.Ext(filename); fileExtension != ".csv" {
 		return false, fmt.Errorf("File %s is not CSV", filename)
+	}
+
+	// Check if file does exist
+	if _, err := os.Stat(filename); err != nil && os.IsNotExist(err) {
+		return false, fmt.Errorf("File %s does not exist", filename)
 	}
 
 	return true, nil
@@ -179,6 +179,11 @@ func writeJSONFile(csvPath string, writerChannel <-chan map[string]string, done 
 }
 
 func main() {
+	flag.Usage = func() {
+		fmt.Printf("Usage: %s [options] <csvFile>\nOptions:\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+
 	fileData, err := getFileData()
 
 	if err != nil {
