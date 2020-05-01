@@ -96,7 +96,7 @@ func processCsvFile(fileData *inputFile, writerChannel chan<- map[string]string)
 		panic("Invalid csv content")
 	}
 
-	headers := strings.Split(line, separator)
+	headers := strings.Split(strings.Trim(line, "\n"), separator)
 
 	for {
 		line, err = reader.ReadString('\n')
@@ -106,7 +106,7 @@ func processCsvFile(fileData *inputFile, writerChannel chan<- map[string]string)
 			break
 		}
 
-		record, err := processLine(headers, line, separator)
+		record, err := processLine(headers, strings.Trim(line, "\n"), separator)
 
 		if err != nil {
 			fmt.Printf("Line: %sError: %s\n", line, err)
