@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bufio"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -17,16 +17,21 @@ type inputFile struct {
 	pretty    bool
 }
 
+func exitGracefully(err error) {
+	fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	os.Exit(1)
+}
+
 func check(e error) {
 	if e != nil {
-		panic(e)
+		exitGracefully(e)
 	}
 }
 
-func getFileData() (*inputFile, error) {
+func getFileData() (inputFile, error) {
 	// Validate arguments
 	if len(os.Args) < 2 {
-		return nil, errors.New("A filepath argument is required")
+		return inputFile{}, errors.New("A filepath argument is required")
 	}
 
 	separator := flag.String("separator", "comma", "Column separator")
@@ -37,10 +42,10 @@ func getFileData() (*inputFile, error) {
 	fileLocation := flag.Arg(0)
 
 	if !(*separator == "comma" || *separator == "semicolon") {
-		return nil, errors.New("Only comma or semicolon separators are allowed")
+		return inputFile{}, errors.New("Only comma or semicolon separators are allowed")
 	}
 
-	return &inputFile{fileLocation, *separator, *pretty}, nil
+	return inputFile{fileLocation, *separator, *pretty}, nil
 }
 
 func checkIfValidFile(filename string) (bool, error) {
@@ -57,9 +62,7 @@ func checkIfValidFile(filename string) (bool, error) {
 	return true, nil
 }
 
-func processLine(headers []string, rawLine string, separator string) (map[string]string, error) {
-	dataList := strings.Split(rawLine, separator)
-
+func processLine(headers []string, dataList []string) (map[string]string, error) {
 	if len(dataList) != len(headers) {
 		return nil, errors.New("Line doesn't match headers format. Skipping")
 	}
@@ -73,40 +76,33 @@ func processLine(headers []string, rawLine string, separator string) (map[string
 	return recordMap, nil
 }
 
-func processCsvFile(fileData *inputFile, writerChannel chan<- map[string]string) {
+func processCsvFile(fileData inputFile, writerChannel chan<- map[string]string) {
 	file, err := os.Open(fileData.filepath)
 
-	if err != nil {
-		panic(err)
-	}
+	check(err)
 
 	defer file.Close()
 
-	separator := ","
-	if fileData.separator == "semicolon" {
-		separator = ";"
-	}
-
 	// Get Headers
-	reader := bufio.NewReader(file)
-	var line string
-	line, err = reader.ReadString('\n')
+	var headers, line []string
+	reader := csv.NewReader(file)
 
-	if err != nil {
-		panic("Invalid csv content")
+	if fileData.separator == "semicolon" {
+		reader.Comma = ';'
 	}
 
-	headers := strings.Split(strings.Trim(line, "\n"), separator)
+	headers, err = reader.Read()
+	check(err)
 
 	for {
-		line, err = reader.ReadString('\n')
+		line, err = reader.Read()
 
 		if err != nil {
 			close(writerChannel)
 			break
 		}
 
-		record, err := processLine(headers, strings.Trim(line, "\n"), separator)
+		record, err := processLine(headers, line)
 
 		if err != nil {
 			fmt.Printf("Line: %sError: %s\n", line, err)
@@ -187,11 +183,11 @@ func main() {
 	fileData, err := getFileData()
 
 	if err != nil {
-		panic(err)
+		exitGracefully(err)
 	}
 
 	if _, err := checkIfValidFile(fileData.filepath); err != nil {
-		panic(err)
+		exitGracefully(err)
 	}
 
 	writerChannel := make(chan map[string]string)
