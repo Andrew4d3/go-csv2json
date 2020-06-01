@@ -53,23 +53,20 @@ func Test_checkIfValidFile(t *testing.T) {
 
 	defer os.Remove(tmpfile.Name())
 
-	type args struct {
-		filename string
-	}
 	tests := []struct {
-		name    string
-		args    args
-		want    bool
-		wantErr bool
+		name     string
+		filename string
+		want     bool
+		wantErr  bool
 	}{
-		{"File does exist", args{tmpfile.Name()}, true, false},
-		{"File does not exist", args{"nowhere/test.csv"}, false, true},
-		{"File is not csv", args{"test.txt"}, false, true},
+		{"File does exist", tmpfile.Name(), true, false},
+		{"File does not exist", "nowhere/test.csv", false, true},
+		{"File is not csv", "test.txt", false, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := checkIfValidFile(tt.args.filename)
+			got, err := checkIfValidFile(tt.filename)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("checkIfValidFile() error = %v, wantErr %v", err, tt.wantErr)
 				return
