@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,9 +98,11 @@ func processCsvFile(fileData inputFile, writerChannel chan<- map[string]string) 
 	for {
 		line, err = reader.Read()
 
-		if err != nil {
+		if err == io.EOF {
 			close(writerChannel)
 			break
+		} else if err != nil {
+			exitGracefully(err)
 		}
 
 		record, err := processLine(headers, line)
