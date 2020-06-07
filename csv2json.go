@@ -134,9 +134,7 @@ func createStringWriter(csvPath string) func(string, bool) {
 	}
 }
 
-func writeJSONFile(csvPath string, writerChannel <-chan map[string]string, done chan<- bool, pretty bool) {
-	writeString := createStringWriter(csvPath)
-
+func getJSONFunc(pretty bool) (func(map[string]string) string, string) {
 	var jsonFunc func(map[string]string) string
 	var breakLine string
 	if pretty {
@@ -152,6 +150,13 @@ func writeJSONFile(csvPath string, writerChannel <-chan map[string]string, done 
 			return string(jsonData)
 		}
 	}
+
+	return jsonFunc, breakLine
+}
+
+func writeJSONFile(csvPath string, writerChannel <-chan map[string]string, done chan<- bool, pretty bool) {
+	writeString := createStringWriter(csvPath)
+	jsonFunc, breakLine := getJSONFunc(pretty)
 
 	fmt.Println("Writing JSON file...")
 
